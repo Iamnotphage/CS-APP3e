@@ -14,7 +14,7 @@ Macbook使用的M系列芯片是无法使用gdb的，在docker中就算拉取了
 
 调用了`strings_not_equal`函数，如其名，可以猜测，如果传入的两个参数不一样，则返回1，如果一样则返回0.(实际进入分析也是如此)
 
-```asm
+```nasm
 0000000000400ee0 <phase_1>:
   400ee0:	48 83 ec 08          	sub    $0x8,%rsp
   400ee4:	be 00 24 40 00       	mov    $0x402400,%esi
@@ -51,7 +51,7 @@ Border relations with Canada have never been better.
 
 在phase2中，注意到这一部分调用了`read_six_numbers`:
 
-```asm
+```nasm
 0000000000400efc <phase_2>:
   400efc:	55                   	push   %rbp
   400efd:	53                   	push   %rbx
@@ -71,7 +71,7 @@ Border relations with Canada have never been better.
 
 进入到`read_six_numbers`分析:
 
-```asm
+```nasm
 000000000040145c <read_six_numbers>:
   40145c:	48 83 ec 18          	sub    $0x18,%rsp
   401460:	48 89 f2             	mov    %rsi,%rdx
@@ -132,7 +132,7 @@ Border relations with Canada have never been better.
 
 一开始先对输入数字的数目判断，小于6个直接爆炸；
 
-```asm
+```nasm
   40148a:	e8 61 f7 ff ff       	callq  400bf0 <__isoc99_sscanf@plt>
   40148f:	83 f8 05             	cmp    $0x5,%eax
   401492:	7f 05                	jg     401499 <read_six_numbers+0x3d>
@@ -141,7 +141,7 @@ Border relations with Canada have never been better.
 
 接下来遍历每个参数，第一个参数必须是1，否则直接爆炸；
 
-```asm
+```nasm
   400f05:	e8 52 05 00 00       	callq  40145c <read_six_numbers>
   400f0a:	83 3c 24 01          	cmpl   $0x1,(%rsp)
   400f0e:	74 20                	je     400f30 <phase_2+0x34>
@@ -150,7 +150,7 @@ Border relations with Canada have never been better.
 
 最后就是对每个参数检查(每次增加`%rbx`直到达到`%rbp`)，每次都是上一个数的两倍，否则直接爆炸；这里`%rbp`已经设定为`%rsp + 0x18`为上界了，也就是最多遍历6个数。(0x18 = 24 => 24/4B = 6个数)
 
-```asm
+```nasm
   400f17:	8b 43 fc             	mov    -0x4(%rbx),%eax
   400f1a:	01 c0                	add    %eax,%eax
   400f1c:	39 03                	cmp    %eax,(%rbx)
@@ -179,7 +179,7 @@ Border relations with Canada have never been better.
 
 然后阅读到这个部分，根据phase2的经验，这里明显需要输入两个数字(`cmp`和`jg`)
 
-```asm
+```nasm
   400f5b:	e8 90 fc ff ff       	callq  400bf0 <__isoc99_sscanf@plt>
   400f60:	83 f8 01             	cmp    $0x1,%eax
   400f63:	7f 05                	jg     400f6a <phase_3+0x27>
@@ -190,7 +190,7 @@ Border relations with Canada have never been better.
 
 然后这里是对第一个数字(`0x8(%rsp)`)与7比较。
 
-```asm
+```nasm
   400f6a:	83 7c 24 08 07       	cmpl   $0x7,0x8(%rsp)
   400f6f:	77 3c                	ja     400fad <phase_3+0x6a>
   400f71:	8b 44 24 08          	mov    0x8(%rsp),%eax
@@ -226,7 +226,7 @@ Border relations with Canada have never been better.
 
 也就是对应下面代码，不同的 `mov $value, %eax`
 
-```asm
+```nasm
   400f75:	ff 24 c5 70 24 40 00 	jmpq   *0x402470(,%rax,8)
   400f7c:	b8 cf 00 00 00       	mov    $0xcf,%eax
   400f81:	eb 3b                	jmp    400fbe <phase_3+0x7b>
@@ -287,7 +287,7 @@ Phase4调用了`func4()`，并且在调用之前初始化了三个参数:`edi`,`
 
 `edx`: 第三个参数，为14
 
-```asm
+```nasm
   40103a:	ba 0e 00 00 00       	mov    $0xe,%edx
   40103f:	be 00 00 00 00       	mov    $0x0,%esi
   401044:	8b 7c 24 08          	mov    0x8(%rsp),%edi
@@ -305,7 +305,7 @@ Phase4调用了`func4()`，并且在调用之前初始化了三个参数:`edi`,`
 
 那么只能进一步查看`func4`的实现了：
 
-```asm
+```nasm
 0000000000400fce <func4>:
   400fce:	48 83 ec 08          	sub    $0x8,%rsp
   400fd2:	89 d0                	mov    %edx,%eax
@@ -382,7 +382,7 @@ int main() {
 
 那么第二个数也是异常容易推理。
 
-```asm
+```nasm
   401051:	83 7c 24 0c 00       	cmpl   $0x0,0xc(%rsp)
   401056:	74 05                	je     40105d <phase_4+0x51>
   401058:	e8 dd 03 00 00       	callq  40143a <explode_bomb>
@@ -405,7 +405,7 @@ int main() {
 
 同样地，根据下面这个片段，很容易找出输入的格式：6个字符。
 
-```asm
+```nasm
   40107a:	e8 9c 02 00 00       	callq  40131b <string_length>
   40107f:	83 f8 06             	cmp    $0x6,%eax
   401082:	74 4e                	je     4010d2 <phase_5+0x70>
@@ -416,7 +416,7 @@ int main() {
 
 输入6个字符将会跳转到`0x4010d2`这里对`%eax`清0后再次跳转到这里:
 
-```asm
+```nasm
   40108b:	0f b6 0c 03          	movzbl (%rbx,%rax,1),%ecx
   40108f:	88 0c 24             	mov    %cl,(%rsp)
   401092:	48 8b 14 24          	mov    (%rsp),%rdx
@@ -441,7 +441,7 @@ int main() {
 
 那么在`0x4010a4`之前的操作，都是对字符串进行处理:
 
-```asm
+```nasm
   40108b:	0f b6 0c 03          	movzbl (%rbx,%rax,1),%ecx
   40108f:	88 0c 24             	mov    %cl,(%rsp)
   401092:	48 8b 14 24          	mov    (%rsp),%rdx
@@ -480,7 +480,7 @@ int main() {
 
 知道变换过程后，需要进一步知道答案，可以查看后续的汇编指令:
 
-```asm
+```nasm
   4010a4:	48 83 c0 01          	add    $0x1,%rax
   4010a8:	48 83 f8 06          	cmp    $0x6,%rax
   4010ac:	75 dd                	jne    40108b <phase_5+0x29>
@@ -537,7 +537,7 @@ yonefg
 
 首先part1: 其实是个双层for-loop
 
-```asm
+```nasm
   401114:	4c 89 ed             	mov    %r13,%rbp
   401117:	41 8b 45 00          	mov    0x0(%r13),%eax
   40111b:	83 e8 01             	sub    $0x1,%eax
@@ -574,7 +574,7 @@ yonefg
 
 继续往下分析part2:
 
-```asm
+```nasm
   401153:	48 8d 74 24 18       	lea    0x18(%rsp),%rsi
   401158:	4c 89 f0             	mov    %r14,%rax
   40115b:	b9 07 00 00 00       	mov    $0x7,%ecx
@@ -592,7 +592,7 @@ yonefg
 
 接下来看看part3: 这里开始稍微复杂
 
-```asm
+```nasm
   401174:	eb 21                	jmp    401197 <phase_6+0xa3>
   401176:	48 8b 52 08          	mov    0x8(%rdx),%rdx
   40117a:	83 c0 01             	add    $0x1,%eax
@@ -627,7 +627,7 @@ yonefg
 
 这里part3可以进一步细分，可以看到这个小部分：实际上是在查找第`7 - xi`个结点
 
-```asm
+```nasm
   401176:	48 8b 52 08          	mov    0x8(%rdx),%rdx
   40117a:	83 c0 01             	add    $0x1,%eax
   40117d:	39 c8                	cmp    %ecx,%eax
@@ -646,7 +646,7 @@ yonefg
 
 其实也很简单，就是对`$rsp + 0x20`开始的内存，进行构造链表:
 
-```asm
+```nasm
   4011ab:	48 8b 5c 24 20       	mov    0x20(%rsp),%rbx
   4011b0:	48 8d 44 24 28       	lea    0x28(%rsp),%rax
   4011b5:	48 8d 74 24 50       	lea    0x50(%rsp),%rsi
@@ -672,7 +672,7 @@ yonefg
 
 换言之，链表是递减的。
 
-```asm
+```nasm
   4011da:	bd 05 00 00 00       	mov    $0x5,%ebp
   4011df:	48 8b 43 08          	mov    0x8(%rbx),%rax
   4011e3:	8b 00                	mov    (%rax),%eax

