@@ -560,3 +560,212 @@ Average CPE = 12.70虽然有提升，但是很少（毕竟只是照抄了Part B�
 
 好吧，看来光靠`iaddq`是无法取得巨大突破，只能求助于第五章节的内容。
 
+最直接的修改就是循环展开(`loop unrolling`)
+
+为什么循环展开能够优化性能？
+
+因为循环展开会尽可能降低循环判断分支的次数，以及可以将循环体内的代码并行执行，或者是提高cache hit
+
+这里10路展开:
+
+```nasm
+#/* $begin ncopy-ys */
+##################################################################
+# ncopy.ys - Copy a src block of len words to dst.
+# Return the number of positive words (>0) contained in src.
+#
+# Include your name and ID here.
+#
+# Describe how and why you modified the baseline code.
+#
+##################################################################
+# Do not modify this portion
+# Function prologue.
+# %rdi = src, %rsi = dst, %rdx = len
+ncopy:
+
+##################################################################
+# You can modify this portion
+        # Loop header
+
+# ten-way loop unrolling
+        iaddq $-10, %rdx        # len - 10 < 0?
+        jl L0R9
+Loop1:
+        mrmovq (%rdi), %r8      # val = *src
+        rmmovq %r8, (%rsi)      # *dst = val
+        andq %r8, %r8           # val <= 0?
+        jle Loop2               # if so, goto Loop2
+        iaddq $1, %rax          # count++
+Loop2:
+        mrmovq 0x8(%rdi), %r8
+        rmmovq %r8, 0x8(%rsi)
+        andq %r8, %r8
+        jle Loop3
+        iaddq $1, %rax
+Loop3:
+        mrmovq 0x10(%rdi), %r8
+        rmmovq %r8, 0x10(%rsi)
+        andq %r8, %r8
+        jle Loop4
+        iaddq $1, %rax
+Loop4:
+        mrmovq 0x18(%rdi), %r8
+        rmmovq %r8, 0x18(%rsi)
+        andq %r8, %r8
+        jle Loop5
+        iaddq $1, %rax
+Loop5:
+        mrmovq 0x20(%rdi), %r8
+        rmmovq %r8, 0x20(%rsi)
+        andq %r8, %r8
+        jle Loop6
+        iaddq $1, %rax
+Loop6:
+        mrmovq 0x28(%rdi), %r8
+        rmmovq %r8, 0x28(%rsi)
+        andq %r8, %r8
+        jle Loop7
+        iaddq $1, %rax
+Loop7:
+        mrmovq 0x30(%rdi), %r8
+        rmmovq %r8, 0x30(%rsi)
+        andq %r8, %r8
+        jle Loop8
+        iaddq $1, %rax
+Loop8:
+        mrmovq 0x38(%rdi), %r8
+        rmmovq %r8, 0x38(%rsi)
+        andq %r8, %r8
+        jle Loop9
+        iaddq $1, %rax
+Loop9:
+        mrmovq 0x40(%rdi), %r8
+        rmmovq %r8, 0x40(%rsi)
+        andq %r8, %r8
+        jle Loop10
+        iaddq $1, %rax
+Loop10:
+        mrmovq 0x48(%rdi), %r8
+        rmmovq %r8, 0x48(%rsi)
+        andq %r8, %r8
+        jle Step
+        iaddq $1, %rax
+Step:
+        iaddq $0x50, %rdi		# i += 10
+        iaddq $0x50, %rsi
+        iaddq $-10, %rdx
+        jge Loop1
+
+# applying range checks to remainders
+L0R9:
+        iaddq   $7,%rdx         # Compare with 3 (len + 10 - 3)
+        jl      L0R2            # len < 3
+        jg      L4R9            # len > 3
+        je      Rem3            # len == 3
+L0R2:
+        iaddq   $2,%rdx         # Compare with 1 (len + 3 - 1)
+        je      Rem1            # len == 1
+        jg      Rem2            # len == 2
+        ret                     # len == 0
+L4R6:
+        iaddq   $2,%rdx         # Compare with 5 (len + 7 - 5)
+        jl      Rem4            # len == 4
+        je      Rem5            # len == 5
+        jg      Rem6            # len == 6
+L4R9:
+        iaddq   $-4,%rdx        # Compare with 7 (len + 3 - 7)
+        jl      L4R6            # len < 7
+        je      Rem7            # len == 7
+L8R9:
+        iaddq   $-1,%rdx        # Compare with 8 (len + 7 - 8)
+        je      Rem8            # len == 8
+
+# dealing with remainders
+Rem9:
+        mrmovq 0x40(%rdi), %r8
+        rmmovq %r8, 0x40(%rsi)
+        andq %r8, %r8
+        jle Rem8
+        iaddq $1, %rax
+Rem8:
+        mrmovq 0x38(%rdi), %r8
+        rmmovq %r8, 0x38(%rsi)
+        andq %r8, %r8
+        jle Rem7
+        iaddq $1, %rax
+Rem7:
+        mrmovq 0x30(%rdi), %r8
+        rmmovq %r8, 0x30(%rsi)
+        andq %r8, %r8
+        jle Rem6
+        iaddq $1, %rax
+Rem6:
+        mrmovq 0x28(%rdi), %r8
+        rmmovq %r8, 0x28(%rsi)
+        andq %r8, %r8
+        jle Rem5
+        iaddq $1, %rax
+Rem5:
+        mrmovq 0x20(%rdi), %r8
+        rmmovq %r8, 0x20(%rsi)
+        andq %r8, %r8
+        jle Rem4
+        iaddq $1, %rax
+Rem4:
+        mrmovq 0x18(%rdi), %r8
+        rmmovq %r8, 0x18(%rsi)
+        andq %r8, %r8
+        jle Rem3
+        iaddq $1, %rax
+Rem3:
+        mrmovq 0x10(%rdi), %r8
+        rmmovq %r8, 0x10(%rsi)
+        andq %r8, %r8
+        jle Rem2
+        iaddq $1, %rax
+Rem2:
+        mrmovq 0x8(%rdi), %r8
+        rmmovq %r8, 0x8(%rsi)
+        andq %r8, %r8
+        jle Rem1
+        iaddq $1, %rax
+Rem1:
+        mrmovq (%rdi), %r8
+        rmmovq %r8, (%rsi)
+        andq %r8, %r8
+        jle Done
+        iaddq $1, %rax
+
+##################################################################
+# Do not modify the following section of code
+# Function epilogue.
+Done:
+        ret
+##################################################################
+# Keep the following label at the end of your function
+End:
+#/* $end ncopy-ys */
+
+```
+
+接下来进行测试:
+
+```bash
+./benchmark.pl
+```
+
+结果显示:
+
+```text
+Average CPE	8.39
+Score	42.3/60.0
+```
+
+至少CEP < 9.0 了，如果要更进一步，就得处理某些不必要的load/use冒泡了，就得修改`.hcl`文件。
+
+笔者在这里已经疲于应对了，暂时这样吧。
+
+# 总结
+
+很像微机原理，这一章走完了微机原理的大部分核心内容。
