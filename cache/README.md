@@ -382,6 +382,10 @@ Points (s,E,b)    Hits  Misses  Evicts    Hits  Misses  Evicts
 
 要不是之前写过leetcode的LRU缓存，还真不好写这个part的LRU
 
+不过写完之后对`cache`的LRU机制又加深了理解，刀刻般的。
+
+完整代码查看`csim.c`
+
 ---
 
 # Part B
