@@ -109,6 +109,8 @@ struct cacheRow* cache = NULL;
 
 如何手搓`LRU`也是有各种各样的解法，这里采用双向链表:
 
+越靠近`dummyHead`的结点表示越常用，当需要eviction时，一般替换靠近`dummyTail`的结点。(详见leetcode的LRU缓存)
+
 ```c
 /**
  * @brief A node for constructing a deque.
