@@ -1,6 +1,21 @@
 # CS:APP3e
 
-在此处说一下环境:
+个人推荐环境解决方案(优先级从上到下):
+
+1. 纯血Linux主机(感觉大部分学生党不会有)
+2. Windows + WSL2/Docker (推荐WSL2)
+3. MacOS + Docker (Apple Silicon会有gdb问题)
+
+**总之，需要一个x86的linux环境**
+
+前置知识:
+
+1. 掌握基本Linux命令
+2. 了解make工具链
+3. 科学上网能力
+4. 折腾过WSL或者Docker
+
+本人环境:
 
 1. MacOS(主力) + Docker(centOS)
 2. Windows(为了gdb调试) + WSL2

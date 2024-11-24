@@ -1,4 +1,7 @@
-/* 
+/* *
+ * @author Iamnotphage
+ * @note https://iamnotphage.github.io
+ * 
  * trans.c - Matrix transpose B = A^T
  *
  * Each transpose function must have a prototype of the form:
@@ -22,6 +25,15 @@ int is_transpose(int M, int N, int A[N][M], int B[M][N]);
 char transpose_submit_desc[] = "Transpose submission";
 void transpose_submit(int M, int N, int A[N][M], int B[M][N])
 {
+    for (int i = 0; i < N; i += 8) {
+        for (int j = 0; j < M; j += 8) {
+            for (int k = i; k < i + 8; k++) {
+                for (int s = j; s < j + 8; j++) {
+                    B[s][k] = A[k][s];
+                }
+            }
+        }
+    }
 }
 
 /* 
