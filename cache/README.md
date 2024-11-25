@@ -431,5 +431,16 @@ Points (s,E,b)    Hits  Misses  Evicts    Hits  Misses  Evicts
 所以分成16个小块是能够一定程度上减轻misses的，具体是多少misses，就得看实际情况了:
 
 ```c
-
+void transpose_submit(int M, int N, int A[N][M], int B[M][N])
+{
+    for (int i = 0; i < N; i += 8) {
+        for (int j = 0; j < M; j += 8) {
+            for (int k = i; k < i + 8; k++) {
+                for (int s = j; s < j + 8; s++) {
+                    B[s][k] = A[k][s];
+                }
+            }
+        }
+    }
+}
 ```
