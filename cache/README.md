@@ -8,10 +8,11 @@
 
 先阅读一下`writeup`发现有个内存调试工具`valgrind`
 
-在docker运行的容器里面安装一下
+在docker运行的容器里面安装一下必要的内容(根据你的情况决定)
 
 ```bash
 yum install valgrind
+yum install python2  # 后续./driver.py时是python2
 ```
 
 # Part A
@@ -444,3 +445,202 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N])
     }
 }
 ```
+
+然后运行`./test-trans -M 32 -N 32`结果发现misses仍然大于300.
+
+```text
+Function 0 (2 total)
+Step 1: Validating and generating memory traces
+Step 2: Evaluating performance (s=5, E=1, b=5)
+func 0 (Transpose submission): hits:1710, misses:343, evictions:311
+```
+
+这并不能得到满分。But why?
+
+理论上来说，转置一个一个小块的时候，对于A的一个小块，一行造成一次本行的miss，然后B对于列的8次miss，而后续A这个小块的第二行再一次造成miss，而B的列已经全部加载到cache中，所以一个小块一共造成16次miss，而一共有16个小块。
+
+所以理论上最优的miss应该是`16 * 16 = 256`
+
+但是实际情况是`343`多了`87`次
+
+继续深入思考发现，上面的`256`是一个极端理想的情况，因为cache在这里的大小只有`32 * 8`个int大小
+
+也就是cache的组号从0~31，可能会存在A的一行加载过后，B的组号与这一行冲突，然后后续要用到A的时候又冲突，如此反复。
+
+比如: (方括号中表示二进制数)
+
+* 假设矩阵A的起始地址是 [0 0100 0000 0000] set index字段为 00000
+* 假设矩阵B的起始地址是 [1 0100 0000 0000] set index字段为 00000
+* 假设仍然分16块，当A的第一个小块的第一行被加载到cache中时
+* A[0][0] ~ A[0][7]均被加入到cache的第0行
+* 接下来复制给B矩阵，当访问B矩阵的第一块的第一列时
+* B[0][0] ~ B[0][7]均被加入到cache的第0行
+* 此时发现set index相同但是tag不同，于是miss eviction!
+* 然后A[0][1]赋值给B[1][0]找A[0][1]的时候又miss eviction!
+* 并且就算是差别很大的两个地址，仍然会有冲突的时候，因为s字段每32个字节加1，也就是每8个int就会加1
+* 而最小的尺寸就是32 * 32，这意味着两个矩阵无论如何都会存在s字段相同的地址
+
+那么很自然的我们可以先存到program stack中，也就是利用程序栈中的某些字段(变量)来存储
+
+这样的话程序避免了在cache中查找这个8个int，如果有上述的冲突话，加载A[0][0]~A[0][7]的时候，已经在程序栈中保存了他们，如果后续B的列读取造成cache冲突的话，就算evict了刚刚加载的这一行，仍然能够进行复制。
+
+```c
+void transpose_submit(int M, int N, int A[N][M], int B[M][N])
+{
+    int a0, a1, a2, a3, a4, a5, a6, a7;
+    for (int i = 0; i < N; i += 8) {
+        for (int j = 0; j < M; j += 8) {
+            for (int k = i; k < i + 8; k++) {
+                a0 = A[k][j];
+                a1 = A[k][j + 1];
+                a2 = A[k][j + 2];
+                a3 = A[k][j + 3];
+                a4 = A[k][j + 4];
+                a5 = A[k][j + 5];
+                a6 = A[k][j + 6];
+                a7 = A[k][j + 7];
+
+                B[j][k] = a0;
+                B[j + 1][k] = a1;
+                B[j + 2][k] = a2;
+                B[j + 3][k] = a3;
+                B[j + 4][k] = a4;
+                B[j + 5][k] = a5;
+                B[j + 6][k] = a6;
+                B[j + 7][k] = a7;
+            }
+        }
+    }
+}
+```
+
+`./test-trans -M 32 -N 32`发现misses变为287了，满分。
+
+---
+
+对于64 * 64的尺寸，这里变得有点困难，按照前面的思路并且经过测试misses是绝对会超过阈值的。
+
+如果继续以8 * 8为小块分块，将会有64块小块。而且因为尺寸变大，这里小块的前四行就会把cache占满(1行A小块7行B列，共4组32行占满)。
+
+难道真的回天乏术了吗？
+
+说实话，卡在这里非常久，在`writeup`中注意到这句话:
+
+> Your transpose function may not modify array A. You may, however, do whatever you want with the contents of array B.
+
+也就是可能需要利用B矩阵在cache中的内容作为一个类似buffer的角色。
+
+对于一个8 * 8的小块，在内部继续划分成4个小块，一个小块是4 * 4，记小小块的id为0，1，2，3
+
+对于一个8 * 8的小块，其转置过程如下:
+
+1. A块0正常转置到B的块0
+2. A块1转置暂存到B的块1（正常应该是B的块3）
+3. 临时变量暂存B的块1
+4. A块3正常转置到B的块1
+5. 临时变量赋值给B的块3
+6. 最后正常转置A的块3到B的块2
+
+然后对于每个8 * 8小块都执行上述操作。图片可以参考[这里](https://www.zixiangcode.top/article/csapp-cachelab#0aa5043cbefd40c29de6dcaf4eed542a)的笔记
+
+```c
+void transpose_64x64(int M, int N, int A[N][M], int B[M][N])
+{   
+    int a0, a1, a2, a3, a4, a5, a6, a7;
+    for (int i = 0; i < N; i += 8) {
+        for (int j = 0; j < M; j += 8) {
+            // 外两层循环遍历每个8 * 8块
+
+            // step0: 对于每个8*8块，因为4行占满cache，每次读4行
+            // step1: 对于小小块，取出0和1块赋值给B
+            for (int k = i; k < i + 4; k++) {
+                // 取 A 的0和1两块
+                a0 = A[k][j + 0];
+                a1 = A[k][j + 1];
+                a2 = A[k][j + 2];
+                a3 = A[k][j + 3];
+                a4 = A[k][j + 4];
+                a5 = A[k][j + 5];
+                a6 = A[k][j + 6];
+                a7 = A[k][j + 7];
+                // 存到 B 的块0
+                B[j + 0][k] = a0;
+                B[j + 1][k] = a1;
+                B[j + 2][k] = a2;
+                B[j + 3][k] = a3;
+
+                // 存到 B 的块1
+                B[j + 0][k + 4] = a4;
+                B[j + 1][k + 4] = a5;
+                B[j + 2][k + 4] = a6;
+                B[j + 3][k + 4] = a7;
+            }
+
+            // step2: 临时变量存储B的块1 同时A的块3转置到B的块1
+            for (int k = j; k < j + 4; k++) {
+                // 存下每块 B 中块1，作为本地 buffer
+                a0 = B[k][i + 4];
+                a1 = B[k][i + 5];
+                a2 = B[k][i + 6];
+                a3 = B[k][i + 7];
+                // A 的块3
+                a4 = A[i + 4][k];
+                a5 = A[i + 5][k];
+                a6 = A[i + 6][k];
+                a7 = A[i + 7][k];
+                // 正常转置
+                B[k][i + 4] = a4;
+                B[k][i + 5] = a5;
+                B[k][i + 6] = a6;
+                B[k][i + 7] = a7;
+                // 临时变量转置到B的块2
+                B[k + 4][i + 0] = a0;
+                B[k + 4][i + 1] = a1;
+                B[k + 4][i + 2] = a2;
+                B[k + 4][i + 3] = a3;
+            }
+
+            // step3: 正常转置最后一个
+            for (int k = i + 4; k < i + 8; k++) {
+                a4 = A[k][j + 4];
+                a5 = A[k][j + 5];
+                a6 = A[k][j + 6];
+                a7 = A[k][j + 7];
+                B[j + 4][k] = a4;
+                B[j + 5][k] = a5;
+                B[j + 6][k] = a6;
+                B[j + 7][k] = a7;
+            }
+        }
+    }
+}
+```
+
+运行`./test-trans -M 64 -N 64`
+
+```text
+Step 1: Validating and generating memory traces
+Step 2: Evaluating performance (s=5, E=1, b=5)
+func 2 (Transpose 64*64 for 64 blocks): hits:9018, misses:1227, evictions:1195
+```
+
+ok，misses < 1300
+
+---
+
+最后是 61 * 67尺寸的矩阵转置
+
+尝试几次不同的分块暴力转置就行了
+
+对submission的函数搞个if-else来匹配一下就行
+
+然后注册函数
+
+最后运行`python2 ./dirver.py`: (命令取决于你机器的环境)
+
+
+# 最后
+
+实现cache和LRU的时候比较爽，其次是32*32的时候，比较痛苦的时候是64*64的时候，已经麻木到随便尝试blocking的时候是61*67
+
+总之，对cache复习了一下
