@@ -15,9 +15,9 @@
 
 int is_transpose(int M, int N, int A[N][M], int B[M][N]);
 
-void transpose_32x32();
-void transpose_64x64();
-void transpose_61x67();
+void transpose_32x32(int M, int N, int A[N][M], int B[M][N]);
+void transpose_64x64(int M, int N, int A[N][M], int B[M][N]);
+void transpose_61x67(int M, int N, int A[N][M], int B[M][N]);
 /* 
  * transpose_submit - This is the solution transpose function that you
  *     will be graded on for Part B of the assignment. Do not change
@@ -184,9 +184,9 @@ void registerFunctions()
     /* Register any additional transpose functions */
     registerTransFunction(trans, trans_desc); 
 
-    registerTransFunction(transpose_32x32, transpose_32x32_desc);
-    registerTransFunction(transpose_64x64, transpose_64x64_desc);
-    registerTransFunction(transpose_61x67, transpose_61x67_desc);
+    // registerTransFunction(transpose_32x32, transpose_32x32_desc);
+    // registerTransFunction(transpose_64x64, transpose_64x64_desc);
+    // registerTransFunction(transpose_61x67, transpose_61x67_desc);
 }
 
 /* 
